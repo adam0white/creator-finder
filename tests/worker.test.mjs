@@ -1,0 +1,113 @@
+import assert from 'node:assert/strict';
+import { test, before } from 'node:test';
+import { build } from 'esbuild';
+import { mkdtemp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const origin = 'https://creator-finder.adamwhite.work';
+let worker;
+const env = {
+  ORIGIN: [origin, 'http://localhost:8787'],
+  YOUTUBE_CLIENT_ID: 'test-client.apps.googleusercontent.com',
+  YOUTUBE_CLIENT_SECRET: 'test-secret',
+  PAGE_SIZE: 20,
+  LIMIT: { limit: async () => ({ success: true }) },
+};
+const ctx = { waitUntil() {} };
+const request = (path, options) => worker.fetch(new Request(origin + path, options), env, ctx);
+
+before(async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'creator-finder-tests-'));
+  const outfile = join(directory, 'worker.mjs');
+  await build({
+    entryPoints: ['src/index.tsx'], outfile, bundle: true, platform: 'node', format: 'esm',
+    jsx: 'automatic', jsxImportSource: 'hono/jsx', tsconfigRaw: {},
+    plugins: [{
+      name: 'external-services',
+      setup(build) {
+        build.onResolve({ filter: /_worker\.js$|^node-fetch$|^@hono-rate-limiter\/cloudflare$/ }, args => ({ path: args.path, namespace: 'services' }));
+        build.onLoad({ filter: /.*/, namespace: 'services' }, args => ({
+          contents: args.path === 'node-fetch'
+            ? 'export default (...args) => globalThis.fetch(...args);'
+            : args.path === '@hono-rate-limiter/cloudflare'
+              ? 'export const cloudflareRateLimiter = () => async (c, next) => next();'
+              : `export default {fetch: async () => new Response('<html>Frontend</html>', {headers: {'Content-Security-Policy': "script-src 'self' 'nonce-test'"}})};`,
+          loader: 'js',
+        }));
+      },
+    }],
+  });
+  worker = (await import(pathToFileURL(outfile).href)).default;
+});
+
+test('security headers apply without replacing the frontend nonce policy', async () => {
+  const response = await request('/');
+  assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
+  assert.match(response.headers.get('content-security-policy'), /nonce-test/);
+});
+
+test('cross-origin form submissions cannot enqueue creators', async () => {
+  const response = await request('/add', {
+    method: 'POST', headers: {'Content-Type': 'text/plain', Origin: 'https://attacker.example'},
+    body: JSON.stringify({handle: '@example'}),
+  });
+  assert.equal(response.status, 403);
+});
+
+test('authorization issues browser-bound state and uses the configured callback', async () => {
+  const response = await request('/authorize');
+  assert.equal(response.status, 302);
+  const authorization = new URL(response.headers.get('location'));
+  assert.equal(authorization.origin, 'https://accounts.google.com');
+  assert.equal(authorization.searchParams.get('redirect_uri'), origin + '/callback');
+  assert.equal(authorization.searchParams.get('client_id'), env.YOUTUBE_CLIENT_ID);
+  assert.ok(authorization.searchParams.get('state')?.length >= 32);
+  assert.match(response.headers.get('set-cookie'), /HttpOnly/);
+  assert.match(response.headers.get('set-cookie'), /SameSite=Lax/);
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+});
+
+test('a missing or mismatched OAuth state is rejected before token exchange', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error('Token endpoint must not be contacted'); };
+  try {
+    for (const cookie of ['', 'oauth_state=expected']) {
+      const response = await request('/callback?code=code&state=wrong', {headers: {cookie}});
+      assert.equal(response.status, 400);
+    }
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test('valid state establishes a secure token cookie and clears the state', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    assert.equal(String(url), 'https://oauth2.googleapis.com/token');
+    assert.equal(new URLSearchParams(options.body).get('redirect_uri'), origin + '/callback');
+    return Response.json({access_token: 'test-access', expires_in: 3600});
+  };
+  try {
+    const start = await request('/authorize');
+    const state = new URL(start.headers.get('location')).searchParams.get('state');
+    const response = await request(`/callback?code=code&state=${state}`, {headers: {cookie: `oauth_state=${state}`}});
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('set-cookie'), /access_token=test-access/);
+    assert.match(response.headers.get('set-cookie'), /oauth_state=;.*Max-Age=0/);
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test('denied OAuth consent is a handled error', async () => {
+  const response = await request('/callback?error=access_denied&state=test', {headers: {cookie:'oauth_state=test'}});
+  assert.equal(response.status, 400);
+  assert.match(await response.text(), /denied|cancelled/i);
+});
+
+test('invalid pagination is rejected before querying D1', async () => {
+  for (const page of ['NaN', '1.5', '0', '-1', 'Infinity']) {
+    const response = await request('/search/example?page=' + page);
+    assert.equal(response.status, 400);
+  }
+});

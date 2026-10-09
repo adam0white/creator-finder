@@ -1,5 +1,6 @@
 #:schema node_modules/wrangler/config-schema.json
 name = "creator-finder"
+account_id = "a20259cba74e506296745f9c67c1f3bc"
 main = "src/index.tsx"
 compatibility_date = "2024-10-20"
 compatibility_flags = [ "nodejs_compat" ]
@@ -7,8 +8,12 @@ workers_dev = false
 upload_source_maps = true
 assets = { directory = "./frontend/.svelte-kit/cloudflare", binding = "ASSETS" }
 
+[[routes]]
+pattern = "creator-finder.adamwhite.work"
+custom_domain = true
+
 [vars]
-ORIGIN = ['https://creator-finder.abdulisik.com', 'http://localhost:8787', '*.cloudflareinsights.com']
+ORIGIN = ['https://creator-finder.adamwhite.work', 'http://localhost:8787']
 PAGE_SIZE = 20
 DELAY_SECONDS = [61, 301, 3601, 43200, 43200, 43200, 43200] # 1 minute, 5 minutes, 1 hour, 12 hours...
 
