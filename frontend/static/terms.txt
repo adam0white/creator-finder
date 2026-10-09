@@ -38,11 +38,11 @@ Privacy Policy
     Logs:
         Cloudflare processes request metadata and diagnostic logs for hosting, troubleshooting, and performance monitoring. Retention depends on the hosting configuration. Request metadata may include URLs; we do not intentionally log Google access tokens or subscription lists.
 
-    No Data Sharing or Selling:
-        We do not sell, share, or resell user data. Any data retained on our servers is strictly public information. User-specific data is kept local to your device.
+    No Selling:
+        We do not sell or resell user data. Google processes authorized API requests, and Cloudflare processes requests and metadata to host this service. Browser tokens and subscription preferences are stored on your device; our server processes them transiently as described above.
 
     Data Deletion:
-        For deleting your stored data, clear your browser cookies and local storage to delete all data related to this website.
+        Clear your browser cookies and local storage to remove locally stored tokens, subscriptions, and preferences. This does not delete public creator records or hosting metadata; hosting metadata follows the configured retention policy.
         Users can revoke this application's access to their data at any time by visiting the Google Security Settings: https://security.google.com/settings/
 
     Additional Policies:

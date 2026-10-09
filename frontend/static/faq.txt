@@ -9,7 +9,7 @@ We only store public data (e.g., video descriptions and profile links). Subscrip
 
 3. How is my data protected?
 
-We don't store personal data on our servers. Your subscription data and API authorization tokens are stored locally in your browser.
+Your token is stored in an HttpOnly, Secure browser cookie, and subscription preferences are stored locally. Our server processes tokens and subscription data transiently for Google API requests. Cloudflare processes request metadata for hosting and diagnostics.
 
 4. What happens when I authorize with YouTube?
 
@@ -21,7 +21,7 @@ This website is free for personal use. If you want to use the data for commercia
 
 6. How can I delete my data?
 
-Clear your browser cookies and local storage to remove all data associated with this website.
+Clear your browser cookies and local storage to remove local tokens, subscriptions, and preferences. You can also revoke the app's access in your Google account. Public creator records and hosting metadata are separate; metadata follows the hosting retention configuration.
 
 7. Are there rate limits?
 

@@ -4,7 +4,7 @@
   let error = $state<string>('');
   let modalContent: HTMLDivElement;
 
-  let dialogElement: HTMLDialogElement;
+  let dialogElement: HTMLDialogElement | undefined = $state();
 
   function authorizeYouTube(): void {
     window.location.href = '/authorize';
