@@ -11,8 +11,7 @@
   },
   "dependencies": {
     "@hono-rate-limiter/cloudflare": "^0.2.1",
-    "hono": "^4.13.1",
-    "@sveltejs/adapter-cloudflare": "^5.0.0"
+    "hono": "^4.13.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241018.0",
@@ -22,6 +21,6 @@
     "esbuild": "^0.28.1",
     "globals": "^15.11.0",
     "typescript-eslint": "^8.11.0",
-    "wrangler": "^3.79.0"
+    "wrangler": "^4.36.0"
   }
 }

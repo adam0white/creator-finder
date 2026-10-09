@@ -38,8 +38,7 @@ database_id = "b63bac41-54e0-4c8e-8701-38c3b3b208fb"
 enabled = true
 head_sampling_rate = 1
 
-[[unsafe.bindings]]
+[[ratelimits]]
 name = "LIMIT"
-type = "ratelimit"
 namespace_id = "1001"
 simple = { limit = 100, period = 60 }
