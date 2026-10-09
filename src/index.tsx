@@ -10,7 +10,6 @@ import { csrf } from 'hono/csrf';
 import { secureHeaders } from 'hono/secure-headers';
 import { html } from 'hono/html';
 import { setCookie, getCookie, deleteCookie } from 'hono/cookie';
-import { cloudflareRateLimiter } from '@hono-rate-limiter/cloudflare';
 import handle from '../frontend/.svelte-kit/cloudflare/_worker.js';
 
 type AppType = {
@@ -57,12 +56,14 @@ app.use('*', async (c, next) => {
   return csrf({ origin: c.env.ORIGIN })(c, next);
 });
 
-app.use(
-  cloudflareRateLimiter<AppType>({
-    rateLimitBinding: (c: Context) => c.env.LIMIT,
-    keyGenerator: (c: Context) => c.req.header('CF-Connecting-IP') ?? 'local',
-  })
-);
+app.use('*', async (c, next) => {
+  const { success } = await c.env.LIMIT.limit({ key: c.req.header('CF-Connecting-IP') ?? 'local' });
+  if (!success) {
+    c.header('Retry-After', '60');
+    return c.json({ error: 'Too many requests. Please try again in a minute.' }, 429);
+  }
+  await next();
+});
 
 // Route all frontend traffic to SvelteKit handler
 app.all('/', async (c) => {

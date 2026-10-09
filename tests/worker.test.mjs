@@ -27,13 +27,9 @@ before(async () => {
     plugins: [{
       name: 'external-services',
       setup(build) {
-        build.onResolve({ filter: /_worker\.js$|^node-fetch$|^@hono-rate-limiter\/cloudflare$/ }, args => ({ path: args.path, namespace: 'services' }));
+        build.onResolve({ filter: /_worker\.js$/ }, args => ({ path: args.path, namespace: 'services' }));
         build.onLoad({ filter: /.*/, namespace: 'services' }, args => ({
-          contents: args.path === 'node-fetch'
-            ? 'export default (...args) => globalThis.fetch(...args);'
-            : args.path === '@hono-rate-limiter/cloudflare'
-              ? 'export const cloudflareRateLimiter = () => async (c, next) => next();'
-              : `export default {fetch: async () => new Response('<html>Frontend</html>', {headers: {'Content-Security-Policy': "script-src 'self' 'nonce-test'"}})};`,
+          contents: `export default {fetch: async () => new Response('<html>Frontend</html>', {headers: {'Content-Security-Policy': "script-src 'self' 'nonce-test'"}})};`,
           loader: 'js',
         }));
       },
@@ -110,4 +106,14 @@ test('invalid pagination is rejected before querying D1', async () => {
     const response = await request('/search/example?page=' + page);
     assert.equal(response.status, 400);
   }
+});
+
+test('rate limiting uses the client IP and rejects exhausted requests', async () => {
+  let key;
+  const limitedEnv = {...env, LIMIT: {limit: async (options) => {key = options.key; return {success: false};}}};
+  const response = await worker.fetch(new Request(origin + '/authorize', {headers: {'CF-Connecting-IP': '203.0.113.9'}}), limitedEnv, ctx);
+  assert.equal(key, '203.0.113.9');
+  assert.equal(response.status, 429);
+  assert.equal(response.headers.get('retry-after'), '60');
+  assert.equal(response.headers.get('set-cookie'), null);
 });
