@@ -117,3 +117,61 @@ test('rate limiting uses the client IP and rejects exhausted requests', async ()
   assert.equal(response.headers.get('retry-after'), '60');
   assert.equal(response.headers.get('set-cookie'), null);
 });
+
+test('invalid YouTube sources are rejected before database or queue access', async () => {
+  let databaseCalls = 0;
+  let queueCalls = 0;
+  const guardedEnv = {...env,
+    DB: {prepare() {databaseCalls++; throw new Error('Must not access D1');}},
+    LINK_QUEUE: {send() {queueCalls++; throw new Error('Must not enqueue');}},
+  };
+  for (const handle of [
+    'https://youtube.com.evil.example/@example',
+    'https://www.youtube.com.evil.example/@example',
+    'https://youtube.com@evil.example/@example',
+    'https://user:password@www.youtube.com/@example',
+    'https://user@youtube.com/@example',
+    'https://youtube.com:8443/@example',
+    'http://youtube.com:8080/@example',
+    'ftp://youtube.com/@example', 'javascript:alert(1)',
+    '//youtube.com/@example', 'https://',
+    'www.youtube.com.evil.example', 'youtube.com.evil.example',
+  ]) {
+    const response = await worker.fetch(new Request(origin + '/add', {
+      method: 'POST', headers: {'Content-Type': 'application/json', Origin: origin},
+      body: JSON.stringify({handle}),
+    }), guardedEnv, ctx);
+    assert.equal(response.status, 400, handle);
+  }
+  assert.equal(databaseCalls, 0);
+  assert.equal(queueCalls, 0);
+});
+
+test('supported YouTube URLs and trimmed handles reach the expected database lookup', async () => {
+  const cases = [
+    ['https://youtube.com/@example', 'https://youtube.com/@example'],
+    ['https://www.youtube.com/channel/UCexample', 'https://www.youtube.com/channel/UCexample'],
+    ['http://youtube.com/@example', 'http://youtube.com/@example'],
+    ['https://youtube.com:443/@example', 'https://youtube.com/@example'],
+    ['  @example  ', 'https://www.youtube.com/@example'],
+    ['  UCexample  ', 'https://www.youtube.com/channel/UCexample'],
+  ];
+  for (const [handle, expectedLink] of cases) {
+    let lookedUp;
+    let queueCalls = 0;
+    const existingEnv = {...env,
+      DB: {prepare(sql) {
+        assert.match(sql, /SELECT id FROM links WHERE link = \?/);
+        return {bind(link) {lookedUp = link; return {first: async () => 42};}};
+      }},
+      LINK_QUEUE: {send() {queueCalls++; throw new Error('Existing source must not enqueue');}},
+    };
+    const response = await worker.fetch(new Request(origin + '/add', {
+      method: 'POST', headers: {'Content-Type': 'application/json', Origin: origin},
+      body: JSON.stringify({handle}),
+    }), existingEnv, ctx);
+    assert.equal(response.status, 200, handle);
+    assert.equal(lookedUp, expectedLink);
+    assert.equal(queueCalls, 0);
+  }
+});

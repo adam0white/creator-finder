@@ -544,6 +544,25 @@ async function addLinksToCookie(c: Context, linkIds: number[]) {
   });
 }
 
+function sanitizeAndFormatYouTubeLink(handle: string): string {
+  const link = handle.trim();
+  if (/^[a-z][a-z\d+.-]*:/i.test(link) || link.startsWith('//')) {
+    const url = new URL(link);
+    if (!['http:', 'https:'].includes(url.protocol) ||
+        !['youtube.com', 'www.youtube.com'].includes(url.hostname) ||
+        url.username || url.password || url.port) {
+      throw new Error('Invalid YouTube URL');
+    }
+    return url.href;
+  }
+  if (!/^[a-zA-Z0-9@_.-]+$/.test(link) || /^(?:www\.|youtube\.com(?:[./:@]|$))/i.test(link)) {
+    throw new Error('Invalid YouTube handle');
+  }
+  return link.startsWith('UC')
+    ? `https://www.youtube.com/channel/${link}`
+    : `https://www.youtube.com/${link}`;
+}
+
 app.post('/add', async (c) => {
   const bodyText = await c.req.text();
   let handle: string;
@@ -562,8 +581,11 @@ app.post('/add', async (c) => {
   ) {
     return c.json({ error: 'Invalid handle' }, 400);
   }
-  if (!/^[a-zA-Z0-9@_.-]+$/.test(handle) && !/^https?:\/\//.test(handle)) {
-    return c.json({ error: 'Handle must be a valid string or URL' }, 400);
+  handle = handle.trim();
+  try {
+    sanitizeAndFormatYouTubeLink(handle);
+  } catch {
+    return c.json({ error: 'Handle must be a valid YouTube handle or URL' }, 400);
   }
 
   try {
@@ -588,21 +610,9 @@ async function addCreators(c: Context, handles: string[]) {
   const addedLinkIds: number[] = [];
   const errorMessages: string[] = [];
 
-  const sanitizeAndFormatLink = (handle: string): string => {
-    const link = handle.trim();
-    if (!link.startsWith('http')) {
-      return handle.startsWith('UC')
-        ? `https://www.youtube.com/channel/${handle}`
-        : `https://www.youtube.com/${handle}`;
-    } else if (/^(https?:\/\/)?(www\.)?youtube\.com/.test(link)) {
-      return link;
-    }
-    throw new Error(`Invalid YouTube link: ${link}`);
-  };
-
   for (const handle of handles) {
     try {
-      const link = sanitizeAndFormatLink(handle);
+      const link = sanitizeAndFormatYouTubeLink(handle);
 
       // Check if Link Already Exists in Database
       const existingLinkId = await db
