@@ -1,4 +1,5 @@
 _worker.js
-_redirects
-_headers
+_worker.js/**
 _routes.json
+_headers
+_redirects

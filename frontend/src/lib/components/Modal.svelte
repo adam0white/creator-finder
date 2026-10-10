@@ -4,21 +4,10 @@
   let error = $state<string>('');
   let modalContent: HTMLDivElement;
 
-  const clientId = '435034689740-dqkt9rq57tf9e0a0i7j9c0jq0gpnhv7q.apps.googleusercontent.com';
-  const redirectUri = window.location.origin + '/callback';
-  const scope = 'https://www.googleapis.com/auth/youtube.readonly';
-
-  let dialogElement: HTMLDialogElement;
+  let dialogElement: HTMLDialogElement | undefined = $state();
 
   function authorizeYouTube(): void {
-    const authUrl =
-      'https://accounts.google.com/o/oauth2/auth' +
-      '?client_id=' + encodeURIComponent(clientId) +
-      '&redirect_uri=' + encodeURIComponent(redirectUri) +
-      '&response_type=code' +
-      '&scope=' + encodeURIComponent(scope);
-
-    window.location.href = authUrl;
+    window.location.href = '/authorize';
   }
 
   interface AddChannelResponse {

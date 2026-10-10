@@ -9,9 +9,7 @@ import { cors } from 'hono/cors';
 import { csrf } from 'hono/csrf';
 import { secureHeaders } from 'hono/secure-headers';
 import { html } from 'hono/html';
-import fetch from 'node-fetch';
-import { setCookie, getCookie } from 'hono/cookie';
-import { cloudflareRateLimiter } from '@hono-rate-limiter/cloudflare';
+import { setCookie, getCookie, deleteCookie } from 'hono/cookie';
 import handle from '../frontend/.svelte-kit/cloudflare/_worker.js';
 
 type AppType = {
@@ -31,32 +29,41 @@ type AppType = {
 
 const app = new Hono<AppType>();
 
-app.use(async (c: Context, next) => {
-  cors({
+app.use('*', async (c, next) => {
+  await secureHeaders({ referrerPolicy: 'no-referrer' })(c, next);
+  // SvelteKit supplies a nonce policy for its inline hydration scripts.
+  // Keep that policy; use this fallback for API and processing responses.
+  if (!c.res.headers.has('Content-Security-Policy')) {
+    c.header('Content-Security-Policy', "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://cloudflareinsights.com; base-uri 'self'; frame-ancestors 'none'; form-action 'self'");
+  }
+});
+
+app.use('*', async (c, next) => {
+  return cors({
     origin: c.env.ORIGIN,
     allowMethods: ['GET', 'POST'],
     allowHeaders: ['Content-Type', 'Authorization'],
     maxAge: 600, // Cache the preflight response for 10 minutes
     credentials: true, // Allow cookies to be sent
-  });
-  csrf({
-    origin: c.env.ORIGIN,
-  });
-  secureHeaders({
-    contentSecurityPolicy: {
-      scriptSrc: c.env.ORIGIN,
-      upgradeInsecureRequests: [],
-    },
-  });
-  return await next();
+  })(c, next);
 });
 
-app.use(
-  cloudflareRateLimiter<AppType>({
-    rateLimitBinding: (c: Context) => c.env.LIMIT,
-    keyGenerator: (c: Context) => getCookie(c, 'access_token') ?? '',
-  })
-);
+app.use('*', async (c, next) => {
+  const origin = c.req.header('Origin');
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method) && origin && !c.env.ORIGIN.includes(origin)) {
+    return c.json({ error: 'Untrusted request origin' }, 403);
+  }
+  return csrf({ origin: c.env.ORIGIN })(c, next);
+});
+
+app.use('*', async (c, next) => {
+  const { success } = await c.env.LIMIT.limit({ key: c.req.header('CF-Connecting-IP') ?? 'local' });
+  if (!success) {
+    c.header('Retry-After', '60');
+    return c.json({ error: 'Too many requests. Please try again in a minute.' }, 429);
+  }
+  await next();
+});
 
 // Route all frontend traffic to SvelteKit handler
 app.all('/', async (c) => {
@@ -65,6 +72,28 @@ app.all('/', async (c) => {
 
 app.all('/MySubs', async (c) => {
   return await handle.fetch(c.req.raw, c.env, c.executionCtx);
+});
+
+app.get('/authorize', (c) => {
+  const origin = new URL(c.req.url).origin;
+  if (!c.env.ORIGIN.includes(origin)) {
+    return c.json({ error: 'Untrusted authorization origin' }, 400);
+  }
+  const state = crypto.randomUUID() + crypto.randomUUID();
+  setCookie(c, 'oauth_state', state, {
+    httpOnly: true, secure: origin.startsWith('https:'), sameSite: 'Lax',
+    maxAge: 600, path: '/',
+  });
+  c.header('Cache-Control', 'no-store');
+  const authorization = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+  authorization.search = new URLSearchParams({
+    client_id: c.env.YOUTUBE_CLIENT_ID,
+    redirect_uri: `${origin}/callback`,
+    response_type: 'code',
+    scope: 'https://www.googleapis.com/auth/youtube.readonly',
+    state,
+  }).toString();
+  return c.redirect(authorization.toString());
 });
 
 const SubscriptionProcessingView = ({ titles, nextPageToken }) => html`
@@ -110,6 +139,7 @@ const SubscriptionProcessingView = ({ titles, nextPageToken }) => html`
 `;
 
 app.get('/process-subscriptions', async (c) => {
+  c.header('Cache-Control', 'no-store');
   const pageToken = c.req.query('pageToken') ?? '';
   const accessToken = getCookie(c, 'access_token'); // Retrieve access token from cookie
 
@@ -131,7 +161,7 @@ app.get('/process-subscriptions', async (c) => {
     // Fetch subscriptions for the current page using the YouTube API
     const response = await fetch(
       `https://www.googleapis.com/youtube/v3/subscriptions?part=snippet&mine=true&maxResults=50${
-        pageToken ? `&pageToken=${pageToken}` : ''
+        pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ''
       }`,
       {
         headers,
@@ -264,10 +294,20 @@ const CallbackSuccessView = () => html`
 
 app.get('/callback', async (c) => {
   const url = new URL(c.req.url);
+  c.header('Cache-Control', 'no-store');
+  const state = url.searchParams.get('state');
+  const expectedState = getCookie(c, 'oauth_state');
+  if (!c.env.ORIGIN.includes(url.origin) || !state || !expectedState || state !== expectedState) {
+    return c.json({ error: 'Invalid or expired authorization state. Please start again.' }, 400);
+  }
+  deleteCookie(c, 'oauth_state', { path: '/' });
+  if (url.searchParams.has('error')) {
+    return c.json({ error: 'Authorization was denied or cancelled. Please try again if needed.' }, 400);
+  }
   const code = url.searchParams.get('code');
 
   if (!code) {
-    return c.json({ error: 'Authorization code missing from URL' });
+    return c.json({ error: 'Authorization code missing from URL' }, 400);
   }
 
   // Exchange the authorization code for an access token
@@ -284,14 +324,14 @@ app.get('/callback', async (c) => {
   });
 
   const tokenData = await tokenResponse.json();
-  if (!tokenData.access_token) {
-    return c.json({ error: 'Failed to obtain access token' });
+  if (!tokenResponse.ok || !tokenData.access_token) {
+    return c.json({ error: 'Failed to obtain access token. Please start authorization again.' }, 502);
   }
 
   // Store access token in an HttpOnly cookie
   setCookie(c, 'access_token', tokenData.access_token, {
     httpOnly: true,
-    secure: true, // Ensure this is only sent over HTTPS
+    secure: url.protocol === 'https:', // HTTP is allowed only for configured localhost development
     maxAge: tokenData.expires_in, // Set cookie expiration to match token expiration
     sameSite: 'Strict',
     path: '/',
@@ -698,7 +738,7 @@ async function getOrCreateCreator(db: D1Database, name: string) {
 app.get('/search/:query', async (c) => {
   try {
     const query = c.req.param('query') || '';
-    const page = parseInt(c.req.query('page') || '1', 10);
+    const page = Number(c.req.query('page') || '1');
     const pageSize = c.env.PAGE_SIZE;
     const offset = (page - 1) * pageSize;
     let message = 'No creators found';
@@ -706,7 +746,7 @@ app.get('/search/:query', async (c) => {
     if (typeof query !== 'string' || query.length > 255) {
       return c.json({ error: 'Invalid search query' }, 400);
     }
-    if (page < 1) {
+    if (!Number.isSafeInteger(page) || page < 1) {
       return c.json({ error: 'Invalid pagination parameters' }, 400);
     }
 

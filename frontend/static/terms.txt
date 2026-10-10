@@ -3,7 +3,7 @@ Terms of Use
     Service Overview:
     This website is a free tool designed to help users discover and organize publicly available data from creators across various platforms. All data stored on our servers is retrieved exclusively from publicly accessible sources, such as YouTube video descriptions.
     Authorization:
-    Authorization with external platforms (e.g., YouTube) is optional and used solely to import publicly available data. Authorization tokens are stored locally on your device and not retained on our servers.
+    YouTube authorization is optional. With your consent, our server uses your YouTube subscription list to find public creator information. Your access token is kept in a secure, HttpOnly browser cookie and sent to our server when needed to make YouTube API requests. We do not intentionally persist tokens or per-user subscription lists in our database.
     Non-Commercial Usage:
     This website is offered free for personal and non-commercial use. Commercial usage or redistribution of the data without prior permission is prohibited.
 
@@ -15,7 +15,7 @@ Terms of Use
 
     Feedback and Donations:
     Feedback, suggestions, sponsorships, and donations are welcome to support further development of this free tool.
-    https://github.com/sponsors/abdulisik
+    https://github.com/sponsors/adam0white
 
 
 Privacy Policy
@@ -30,23 +30,23 @@ Privacy Policy
         Third-Party Sharing: Data may be shared with partners when necessary to provide core services (e.g., API providers) while adhering to their privacy policies.
 
     Data Protection:
-        Access Tokens: Your Google access token is securely stored in an HttpOnly, Secure cookie and is not stored on our servers.
+        Access Tokens: Your Google access token is stored in an HttpOnly, Secure browser cookie. Our server processes the token to make authorized requests to Google; it is not intentionally persisted in our database.
         Encryption: HTTPS encryption is used for all data transmissions.
         Confidentiality: We implement security procedures to safeguard your data and prevent unauthorized access.
-        Minimal Retention: Only public creator data is stored on our servers. Sensitive or private user data is not retained.
+        Minimal Retention: Our database stores public creator data, not per-user subscription lists or Google access tokens. Subscription information is processed transiently to import creator data.
 
     Logs:
-        Server logs are automatically deleted after 7 days per Cloudflare Workers Logs limitations. Logs are used solely for troubleshooting and performance monitoring.
+        Cloudflare processes request metadata and diagnostic logs for hosting, troubleshooting, and performance monitoring. Retention depends on the hosting configuration. Request metadata may include URLs; we do not intentionally log Google access tokens or subscription lists.
 
-    No Data Sharing or Selling:
-        We do not sell, share, or resell user data. Any data retained on our servers is strictly public information. User-specific data is kept local to your device.
+    No Selling:
+        We do not sell or resell user data. Google processes authorized API requests, and Cloudflare processes requests and metadata to host this service. Browser tokens and subscription preferences are stored on your device; our server processes them transiently as described above.
 
     Data Deletion:
-        For deleting your stored data, clear your browser cookies and local storage to delete all data related to this website.
+        Clear your browser cookies and local storage to remove locally stored tokens, subscriptions, and preferences. This does not delete public creator records or hosting metadata; hosting metadata follows the configured retention policy.
         Users can revoke this application's access to their data at any time by visiting the Google Security Settings: https://security.google.com/settings/
 
     Additional Policies:
-        This application uses YouTube API Services. By using this application, you additionally agree to the Google Privacy Policy: http://www.google.com/policies/privacy
+        This application uses YouTube API Services. Google's Privacy Policy is available at https://policies.google.com/privacy
 
     Contact Us:
-        For inquiries regarding publicly available data usage or other concerns, please contact us at inquiries@abdulisik.com.
+        For inquiries regarding data usage, deletion requests, or other concerns, please contact us at hello@adamwhite.work.

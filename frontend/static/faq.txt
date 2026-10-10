@@ -9,11 +9,11 @@ We only store public data (e.g., video descriptions and profile links). Subscrip
 
 3. How is my data protected?
 
-We don't store personal data on our servers. Your subscription data and API authorization tokens are stored locally in your browser.
+Your token is stored in an HttpOnly, Secure browser cookie, and subscription preferences are stored locally. Our server processes tokens and subscription data transiently for Google API requests. Cloudflare processes request metadata for hosting and diagnostics.
 
 4. What happens when I authorize with YouTube?
 
-Authorization allows us to fetch your subscriptions and import public data about those creators. This process is optional and entirely local; no personal tokens or subscription data are sent to our servers.
+Authorization lets our server read your YouTube subscriptions and import public data about those creators. This is optional. Your token is kept in an HttpOnly browser cookie and sent to our server for Google API requests; tokens and per-user subscription lists are not intentionally persisted in our database.
 
 5. Can I use this data commercially?
 
@@ -21,15 +21,15 @@ This website is free for personal use. If you want to use the data for commercia
 
 6. How can I delete my data?
 
-Clear your browser cookies and local storage to remove all data associated with this website.
+Clear your browser cookies and local storage to remove local tokens, subscriptions, and preferences. You can also revoke the app's access in your Google account. Public creator records and hosting metadata are separate; metadata follows the hosting retention configuration.
 
 7. Are there rate limits?
 
-Yes, to ensure fair usage, rate limits are enforced. You will receive an error if you exceed the limits. Simply wait before making additional requests. Authorization will increase your rate limit.
+Yes, to ensure fair usage, rate limits are enforced per IP address. You will receive an error if you exceed the limits. Simply wait before making additional requests.
 
 8. Can I donate or sponsor this project?
 
-Yes! We appreciate feedback, donations, and sponsorships to help maintain and improve this free tool. https://github.com/sponsors/abdulisik
+Yes! We appreciate feedback, donations, and sponsorships to help maintain and improve this free tool. https://github.com/sponsors/adam0white
 
 9. How do you handle API usage limits?
 
@@ -37,4 +37,4 @@ We use rate-limited external APIs (e.g., YouTube). If limits are exceeded, proce
 
 10. Is this project open-source?
 
-Yes! Contributions are welcome. You can find the source code on GitHub: https://github.com/abdulisik/creator-finder
+Yes! Contributions are welcome. You can find the source code on GitHub: https://github.com/adam0white/creator-finder

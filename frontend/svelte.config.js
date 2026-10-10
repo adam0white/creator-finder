@@ -7,6 +7,20 @@ const config = {
 
 	kit: {
 		adapter: adapter(),
+		csp: {
+			mode: 'nonce',
+			directives: {
+				'default-src': ['self'],
+				'script-src': ['self', 'https://static.cloudflareinsights.com'],
+				'style-src': ['self', 'unsafe-inline'],
+				'style-src-attr': ['unsafe-inline'],
+				'img-src': ['self', 'data:', 'https:'],
+				'connect-src': ['self', 'https://cloudflareinsights.com'],
+				'base-uri': ['self'],
+				'frame-ancestors': ['none'],
+				'form-action': ['self']
+			}
+		},
 		alias: {
       '@': './src' // Optional: Shorter imports
     },

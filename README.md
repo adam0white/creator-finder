@@ -1,5 +1,7 @@
 # Creator Finder Database
 
+Production domain: <https://creator-finder.adamwhite.work>.
+
 Tired of manually hunting down your favorite YouTubers on Patreon? Creator Finder Database automatically discovers where your favorite creators post content across platforms. Starting with YouTube integration, it helps fans:
 
 - Find creators they already follow on new platforms
@@ -102,6 +104,20 @@ Prerequisites:
 
 Populate a local `.dev.vars` file as well as [Workers Environment Variables (Secrets)](https://developers.cloudflare.com/workers/configuration/secrets/) with the following:
 YOUTUBE_API_KEY, YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET.
+
+`npm install` also installs the frontend dependencies. `npm test` runs the Worker regression checks, and `npm --prefix frontend run check` checks the Svelte application. Deployment builds the frontend before uploading the Worker.
+
+### Google OAuth and domain configuration
+
+- Google Cloud project: `creator-finder`; keep the existing web OAuth client and its ID.
+- Production JavaScript origin: `https://creator-finder.adamwhite.work`.
+- Production redirect URI: `https://creator-finder.adamwhite.work/callback`.
+- Authorized consent-screen domain: `adamwhite.work`.
+- Homepage: `https://creator-finder.adamwhite.work/`; privacy policy and terms: `https://creator-finder.adamwhite.work/terms.txt`.
+- Local development origin and callback: `http://localhost:8787` and `http://localhost:8787/callback`.
+- Start authorization through `/authorize`, which generates browser-bound state before redirecting to Google.
+
+The custom domain is managed by `wrangler.toml`. The existing D1 database and queues are reused; do not reset the production database as part of deployment. After a domain change, users need to reauthorize and reimport subscriptions because browser cookies do not transfer between domains.
 
 Install dependencies:
 

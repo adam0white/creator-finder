@@ -2,7 +2,7 @@
   import { tick } from 'svelte';
   import { searchStore, type SearchResponse } from '../stores/search';
   
-  let searchTimeout: NodeJS.Timeout;
+  let searchTimeout: ReturnType<typeof setTimeout>;
 
   export let onSearch: (query: string) => Promise<void>;
 
